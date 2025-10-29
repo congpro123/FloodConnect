@@ -1,4 +1,5 @@
-base64
-os
-streamlit_option_menu
+streamlit
+streamlit-option-menu
 firebase_admin
+google-cloud-storage
+google-cloud-firestore
