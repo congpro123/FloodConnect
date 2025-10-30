@@ -3,6 +3,7 @@ import streamlit as st
 import base64
 import os
 import streamlit.components.v1 as components
+
 st.set_page_config(
     page_title="Mạng Xã Hội · FloodConnect",
     page_icon="🌐",
@@ -47,9 +48,10 @@ st.markdown(f"""
 
         .stApp {{
             font-family: 'Poppins', sans-serif;
-            color: #e6f0ff; /* Màu chữ dịu */
+            color: #e6f0ff;
         }}
 
+        /* --- Tiêu đề chính --- */
         .title-container {{
             display: flex;
             align-items: center;
@@ -58,21 +60,26 @@ st.markdown(f"""
             animation: fadeInDown 1.2s ease;
             z-index: 2;
             position: relative;
+            gap: 20px;
+            flex-wrap: nowrap;
         }}
 
         .title-container img {{
-            width: 330px;
+            width: 280px;
             height: auto;
             animation: float 4s ease-in-out infinite;
-            margin: 0 -50px;
         }}
 
         .title-text {{
-            font-size: 2.8em;
-            color: #cce5ff; /* màu be xanh nhạt */
+            font-size: 2.6em;
+            color: #cce5ff;
             text-align: center;
             text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 0 18px rgba(255,255,255,0.2);
             font-weight: 700;
+            line-height: 1.3em;
+            word-break: break-word;
+            white-space: normal;
+            margin: 0 0.5rem;
         }}
 
         h2 {{
@@ -83,7 +90,7 @@ st.markdown(f"""
             font-weight: 500;
         }}
 
-        /* Nút */
+        /* --- Nút --- */
         .stButton > button {{
             background: linear-gradient(135deg, #b3d1ff 0%, #80b3ff 100%);
             color: #001f4d;
@@ -105,7 +112,7 @@ st.markdown(f"""
             box-shadow: 0 6px 14px rgba(0,0,0,0.4);
         }}
 
-        /* Hiệu ứng animation */
+        /* --- Hiệu ứng --- */
         @keyframes fadeInDown {{
             0% {{ opacity: 0; transform: translateY(-20px); }}
             100% {{ opacity: 1; transform: translateY(0); }}
@@ -116,12 +123,53 @@ st.markdown(f"""
             50% {{ transform: translateY(-10px); }}
             100% {{ transform: translateY(0px); }}
         }}
+
+        /* --- Responsive: Điện thoại & Tablet nhỏ --- */
+        @media (max-width: 768px) {{
+            .block-container {{
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                max-width: 100% !important;
+            }}
+
+            .title-container {{
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 1.5rem;
+            }}
+
+            .title-container img {{
+                width: 120px;
+                margin: 5px auto;
+                display: block;
+            }}
+
+            .title-text {{
+                font-size: 1.3em;
+                line-height: 1.2em;
+                padding: 0 0.5rem;
+                text-align: center;
+                margin: 0.3rem 0;
+            }}
+
+            h2 {{
+                font-size: 1em;
+                margin-top: 0.8rem;
+                padding: 0 0.5rem;
+            }}
+
+            .stButton > button {{
+                font-size: 1em;
+                padding: 10px 16px;
+            }}
+        }}
     </style>
 
     <video autoplay loop muted playsinline class="background-video">
         <source src="{VIDEO_URL}" type="video/mp4">
     </video>
-    <div class="video-overlay"></div>
 """, unsafe_allow_html=True)
 
 # --- Tiêu đề chính ---
@@ -156,5 +204,5 @@ with col3:
 
 with col4:
     if st.button("🆘 Tôi là người cần cứu trợ"):
-        st.query_params["scroll"] = ["form"] 
+        st.query_params["scroll"] = ["form"]
         st.switch_page("pages/Bản đồ.py")
