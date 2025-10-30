@@ -3,3 +3,4 @@ streamlit-option-menu
 firebase_admin
 google-cloud-storage
 google-cloud-firestore
+streamlit_js_eval
