@@ -1,100 +1,97 @@
-# streamlit page title: Bản đồ - Những nơi cần cứu trợ
 import streamlit as st
+import sqlite3
+import json
 import os
 from streamlit_js_eval import streamlit_js_eval
 
-st.set_page_config(page_title="Bản đồ cứu trợ", page_icon="🗺️", layout="wide")
+# ==================== CÀI ĐẶT BAN ĐẦU ====================
+st.set_page_config(page_title="Bản đồ cứu trợ", layout="wide")
+# --- Tự động cuộn xuống phần gửi cứu trợ nếu có tham số ---
+params = st.query_params
 
-# === Sidebar ===
-role = st.session_state.get("role", "Khách")
-st.sidebar.success(f"Xin chào, {role.capitalize()} 👋")
-if st.sidebar.button("🏠 Quay lại màn hình chính"):
-    st.switch_page("Trang chủ.py")
+if params.get("scroll") == ["form"]:
+    st.components.v1.html("""
+        <script>
+        window.addEventListener("load", () => {
+            setTimeout(() => {
+                const form = document.getElementById("rescue-form");
+                if (form) {
+                    form.scrollIntoView({behavior: "smooth", block: "center"});
+                    form.style.transition = "box-shadow 0.3s ease";
+                    form.style.boxShadow = "0 0 20px gold";
+                    setTimeout(() => form.style.boxShadow = "none", 1500);
+                }
+            }, 600);
+        });
+        </script>
+    """, height=0)
+DB_PATH = "rescue.db"
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-st.title("🗺️ Bản đồ - Những nơi cần cứu trợ")
-
-# === File chứa dữ liệu toạ độ ===
-file_path = os.path.join(os.path.dirname(__file__), "data.txt")
-
-# === Đọc danh sách toạ độ đã lưu ===
-coordinates = []
-if os.path.exists(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                try:
-                    lat, lng, name = line.strip().split(",")
-                    coordinates.append({"lat": float(lat), "lng": float(lng), "name": name})
-                except:
-                    pass
-
-# === Tính trung tâm bản đồ ===
-if coordinates:
-    center_lat = sum(p["lat"] for p in coordinates) / len(coordinates)
-    center_lng = sum(p["lng"] for p in coordinates) / len(coordinates)
-else:
-    center_lat, center_lng = 10.762622, 106.660172  # TP. Hồ Chí Minh mặc định
-
-# === Giao diện gửi yêu cầu cứu trợ ===
-st.markdown("---")
-st.subheader("🆘 Gửi yêu cầu cứu trợ")
-
-if "show_form" not in st.session_state:
-    st.session_state["show_form"] = False
-
-if not st.session_state["show_form"]:
-    if st.button("🆘 Tôi cần cứu trợ"):
-        st.session_state["show_form"] = True
-        st.rerun()
-else:
-    st.info("👉 Hãy nhập thông tin để đội cứu trợ có thể tìm đến bạn nhanh nhất.")
-
-    name = st.text_input("👤 Họ và tên của bạn")
-    phone = st.text_input("📞 Số điện thoại liên hệ")
-
-    # --- Lấy vị trí tự động ---
-    if st.button("📍 Lấy vị trí hiện tại"):
-        coords = streamlit_js_eval(
-            js_expressions="await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(p => resolve([p.coords.latitude, p.coords.longitude]), err => reject(err)));",
-            key="get_location"
+# ==================== KHỞI TẠO DATABASE ====================
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS rescue_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            phone TEXT,
+            note TEXT,
+            address TEXT,
+            lat REAL,
+            lng REAL,
+            images TEXT
         )
-        if coords:
-            st.session_state["lat"] = coords[0]
-            st.session_state["lng"] = coords[1]
-            st.success(f"✅ Lấy được vị trí: ({coords[0]:.6f}, {coords[1]:.6f})")
-        else:
-            st.warning("⚠️ Không thể lấy vị trí (có thể bạn đã từ chối GPS).")
+    """)
+    conn.commit()
+    conn.close()
 
-    lat = st.number_input("📍 Vĩ độ (latitude)", format="%.6f", value=st.session_state.get("lat", 0.0))
-    lng = st.number_input("📍 Kinh độ (longitude)", format="%.6f", value=st.session_state.get("lng", 0.0))
-    note = st.text_area("📝 Ghi chú thêm (tình trạng, số người, v.v.)")
+# chạy ngay lập tức để đảm bảo có bảng
+init_db()
 
-    if st.button("✅ Gửi thông tin cứu trợ"):
-        if name.strip() and phone.strip() and lat and lng:
-            with open(file_path, "a", encoding="utf-8") as f:
-                f.write(f"{lat},{lng},{name}\n")
-            st.success("✅ Thông tin cứu trợ đã được gửi thành công! ❤️")
-            # reset form
-            st.session_state["show_form"] = False
-            st.session_state.pop("lat", None)
-            st.session_state.pop("lng", None)
-            st.rerun()
-        else:
-            st.warning("⚠️ Vui lòng nhập đầy đủ thông tin!")
+# ==================== HÀM LẤY DỮ LIỆU ====================
+def get_all_requests():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name, phone, note, address, lat, lng, images FROM rescue_requests")
+    rows = c.fetchall()
+    conn.close()
+    return [
+        {
+            "name": r[0],
+            "phone": r[1],
+            "note": r[2],
+            "address": r[3],
+            "lat": r[4],
+            "lng": r[5],
+            "images": json.loads(r[6]) if r[6] else []
+        }
+        for r in rows
+    ]
 
-st.markdown("---")
+# ==================== HIỂN THỊ BẢN ĐỒ ====================
+st.subheader("🗺️ Bản đồ cứu trợ")
 
-# === Hiển thị bản đồ ===
-html_code = f"""
+data = get_all_requests()
+center_lat = data[0]["lat"] if data else 10.762622
+center_lng = data[0]["lng"] if data else 106.660172
+api_key = "AIzaSyD4KVbyvfBHFpN_ZNn7RrmZG5Qw9C_VbgU"  # 🔑 thay bằng API key thật
+
+html_template = f"""
 <!DOCTYPE html>
 <html>
   <head>
     <style>
-      #map {{
-        height: 600px;
-        width: 100%;
-        border-radius: 10px;
+      #map {{ height: 600px; width: 100%; border-radius: 10px; }}
+      img.marker-img {{ width: 180px; border-radius: 8px; margin-top: 5px; }}
+      button.map-btn {{
+        display: block; margin-top: 5px; padding: 6px 10px;
+        background: #007bff; color: white; border: none;
+        border-radius: 5px; cursor: pointer;
       }}
+      button.map-btn:hover {{ background: #0056b3; }}
     </style>
   </head>
   <body>
@@ -107,7 +104,7 @@ html_code = f"""
           center: center,
         }});
 
-        const locations = {coordinates};
+        const locations = {json.dumps(data)};
 
         locations.forEach(loc => {{
           const marker = new google.maps.Marker({{
@@ -118,17 +115,101 @@ html_code = f"""
               scaledSize: new google.maps.Size(40, 40)
             }}
           }});
+
+          const firstImg = loc.images && loc.images.length
+              ? `<img src="uploads/${{loc.images[0]}}" class='marker-img'><br>` : "";
           const info = new google.maps.InfoWindow({{
-            content: `<b>${{loc.name}}</b>`
+              content: `
+                <b>${{loc.name}}</b><br>
+                🏠 ${{loc.address || ""}}<br>
+                ${{firstImg}}
+                ${{loc.note || ""}}<br>
+                <button class="map-btn" onclick="window.open('tel:${{loc.phone}}')">📞 Gọi ngay</button>
+                <button class="map-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${{loc.lat}},${{loc.lng}}')">🧭 Đi đến cứu hộ</button>
+                ${{loc.images && loc.images.length > 1 ? `<button class='map-btn' onclick='showImages("uploads", ${{JSON.stringify(loc.images)}})'>📷 Xem thêm ảnh</button>` : ""}}
+              `
           }});
           marker.addListener("click", () => info.open(map, marker));
         }});
       }}
+
+      function showImages(basePath, images) {{
+        let html = images.map(img => `<img src='${{basePath}}/${{img}}' style='width:100%;border-radius:10px;margin-bottom:5px;'>`).join('');
+        const w = window.open('', '_blank', 'width=400,height=600,scrollbars=yes');
+        w.document.write(`<title>Ảnh cứu trợ</title><body style='margin:10px;font-family:sans-serif;'>${{html}}</body>`);
+      }}
     </script>
-    <script async
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD4KVbyvfBHFpN_ZNn7RrmZG5Qw9C_VbgU&callback=initMap">
-    </script>
+    <script async src="https://maps.googleapis.com/maps/api/js?key={api_key}&callback=initMap"></script>
   </body>
 </html>
 """
-st.components.v1.html(html_code, height=600)
+
+st.components.v1.html(html_template, height=600)
+
+# ==================== FORM GỬI YÊU CẦU ====================
+st.markdown('<div id="rescue-form"></div>', unsafe_allow_html=True)
+st.markdown("### 🆘 Gửi yêu cầu cứu trợ")
+
+with st.form("rescue_form"):
+    name = st.text_input("👤 Họ và tên:")
+    phone = st.text_input("📞 Số điện thoại:")
+    address = st.text_input("🏠 Địa chỉ (hoặc mô tả vị trí):")
+    note = st.text_area("📝 Tình trạng cần cứu trợ:")
+
+    # --- Nút lấy tọa độ tự động ---
+    get_loc = st.form_submit_button("📍 Lấy tọa độ vị trí hiện tại")
+
+    if get_loc:
+        js = """
+        new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve(JSON.stringify({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude
+                })),
+                err => resolve("ERROR:" + err.message)
+            );
+        });
+        """
+        coords = streamlit_js_eval(js_expressions=js, key="get_coords")
+        if coords and not str(coords).startswith("ERROR"):
+            try:
+                d = json.loads(coords)
+                st.session_state["lat"] = d["lat"]
+                st.session_state["lng"] = d["lng"]
+                st.success(f"✅ Lấy vị trí thành công: ({d['lat']:.6f}, {d['lng']:.6f})")
+            except:
+                st.warning("⚠️ Lỗi khi đọc dữ liệu vị trí.")
+        else:
+            st.warning("⚠️ Không thể lấy vị trí (Hãy thử bấm liên tục thật nhanh).")
+
+    images = st.file_uploader("📸 Ảnh minh chứng (tối đa 3 ảnh):", accept_multiple_files=True)
+    submitted = st.form_submit_button("✅ Gửi yêu cầu cứu trợ")
+
+    if submitted:
+        lat = st.session_state.get("lat", None)
+        lng = st.session_state.get("lng", None)
+
+        if not all([name.strip(), phone.strip(), address.strip()]) or lat is None or lng is None:
+            st.warning("⚠️ Vui lòng nhập đầy đủ thông tin và lấy tọa độ trước khi gửi!")
+        else:
+            img_paths = []
+            for img in images[:3]:
+                path = os.path.join(UPLOAD_DIR, img.name)
+                with open(path, "wb") as f:
+                    f.write(img.getbuffer())
+                img_paths.append(img.name)
+
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("""
+                INSERT INTO rescue_requests (name, phone, note, address, lat, lng, images)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (name, phone, note, address, lat, lng, json.dumps(img_paths)))
+            conn.commit()
+            conn.close()
+
+            st.success("✅ Gửi yêu cầu cứu trợ thành công! Bản đồ sẽ cập nhật sau vài giây.")
+            st.session_state.pop("lat", None)
+            st.session_state.pop("lng", None)
+            st.rerun()
