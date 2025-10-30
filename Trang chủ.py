@@ -2,7 +2,7 @@
 import streamlit as st
 import base64
 import os
-
+import streamlit.components.v1 as components
 st.set_page_config(
     page_title="Mạng Xã Hội · FloodConnect",
     page_icon="🌐",
@@ -155,7 +155,6 @@ with col3:
         st.switch_page("pages/Đăng nhập.py")
 
 with col4:
-    if st.button("🆘 Người cần cứu trợ"):
-        st.session_state["role"] = "flooded"
+    if st.button("🆘 Tôi là người cần cứu trợ"):
+        st.query_params["scroll"] = ["form"] 
         st.switch_page("pages/Bản đồ.py")
-
