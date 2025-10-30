@@ -147,7 +147,7 @@ with col1:
 with col2:
     if st.button("🤝 Tình nguyện viên"):
         st.session_state["role"] = "Supporter"
-        st.switch_page("pages/Đăng nhập.py")
+        st.switch_page("pages/Bản đồ.py")
 
 with col3:
     if st.button("🏠 Người dân vùng lũ"):
@@ -158,3 +158,4 @@ with col4:
     if st.button("🆘 Người cần cứu trợ"):
         st.session_state["role"] = "flooded"
         st.switch_page("pages/Bản đồ.py")
+
