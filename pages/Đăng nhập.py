@@ -1,9 +1,10 @@
-# streamlit page title: Đang nhập FloodConnect
+# streamlit page title: Đăng nhập FloodConnect
 import streamlit as st
 from streamlit_option_menu import option_menu
 import firebase_admin
 from firebase_admin import credentials, firestore
 import time
+
 # --- Cấu hình Firebase ---
 if not firebase_admin._apps:
     cred = credentials.Certificate("firebase_key.json")
@@ -65,11 +66,6 @@ st.markdown(f"""
             padding: 10px 15px;
             transition: all 0.25s ease;
         }}
-        .stTextInput > div > div > input:focus,
-        .stSelectbox > div > div:focus {{
-            border-color: #93c5fd;
-            box-shadow: 0 0 10px rgba(147, 197, 253, 0.5);
-        }}
         input::placeholder {{
             color: #a5b4fc;
         }}
@@ -90,28 +86,6 @@ st.markdown(f"""
             background: linear-gradient(135deg, #66b6ff 0%, #4a7fff 100%);
             transform: scale(1.05);
         }}
-        ul[role="tablist"] {{
-            background: rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(10px);
-            border-radius: 50px;
-            padding: 10px 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }}
-        li[role="tab"] {{
-            border-radius: 30px !important;
-            padding: 10px 35px !important;
-            margin: 0 5px !important;
-            font-size: 17px !important;
-            transition: all 0.3s ease !important;
-        }}
-        li[role="tab"]:hover {{
-            background-color: rgba(59,130,246,0.3) !important;
-        }}
-        li[role="tab"][aria-selected="true"] {{
-            background: linear-gradient(90deg, #4a7fff, #2563eb) !important;
-            box-shadow: 0 0 10px rgba(59,130,246,0.6);
-            font-weight: bold !important;
-        }}
     </style>
 
     <video autoplay loop muted playsinline preload="none" class="background-video">
@@ -126,12 +100,6 @@ with st.container():
         icons=["box-arrow-in-right", "person-plus"],
         menu_icon=None, default_index=0,
         orientation="horizontal",
-        styles={
-            "container": {"background-color": "rgba(0,0,0,0)", "justify-content": "center"},
-            "icon": {"color": "white", "font-size": "20px"},
-            "nav-link": {"font-size": "17px", "color": "white", "margin": "0px 0px"},
-            "nav-link-selected": {"background-color": "#4a7fff", "color": "white"},
-        }
     )
 
 # --- Đăng nhập ---
@@ -191,5 +159,5 @@ else:
                 })
                 st.success("✅ Tạo tài khoản thành công! Hãy quay lại đăng nhập.")
                 time.sleep(2)
-                st.experimental_rerun()
+                st.rerun()
     st.markdown("</div>", unsafe_allow_html=True)
