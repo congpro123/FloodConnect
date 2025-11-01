@@ -1,37 +1,67 @@
 # streamlit page title: Mạng Xã Hội Mini
 import streamlit as st
-from google.cloud import firestore
 from datetime import datetime
 import time
+from firebase_rest import get_firestore_docs, get_access_token
+import requests
+import json
 
-# === KHỞI TẠO FIREBASE ===
-db = firestore.Client.from_service_account_json("firebase_key.json")
+# === CẤU HÌNH FIREBASE REST API ===
+try:
+    key = dict(st.secrets["firebase"])
+except Exception:
+    with open("firebase_key.json", "r") as f:
+        key = json.load(f)
+
+PROJECT_ID = key["project_id"]
+BASE_URL = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents"
+
+# === HÀM TIỆN ÍCH GỬI YÊU CẦU REST ===
+def firestore_add(collection, data):
+    """Thêm tài liệu mới vào collection"""
+    token = get_access_token()
+    url = f"{BASE_URL}/{collection}"
+    headers = {"Authorization": f"Bearer {token}"}
+    body = {"fields": {k: {"stringValue": str(v)} for k, v in data.items()}}
+    r = requests.post(url, headers=headers, json=body)
+    if not r.ok:
+        st.error(f"Lỗi ghi Firestore: {r.status_code} - {r.text}")
+    return r.ok
+
+def firestore_query(collection, order_by=None, direction="DESCENDING"):
+    """Lấy tài liệu theo thứ tự thời gian"""
+    token = get_access_token()
+    url = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/(default)/documents:runQuery"
+    headers = {"Authorization": f"Bearer {token}"}
+    body = {
+        "structuredQuery": {
+            "from": [{"collectionId": collection}],
+            "orderBy": [
+                {
+                    "field": {"fieldPath": order_by or "timestamp"},
+                    "direction": direction
+                }
+            ]
+        }
+    }
+    r = requests.post(url, headers=headers, json=body)
+    if not r.ok:
+        st.error(f"Lỗi truy vấn Firestore: {r.status_code} - {r.text}")
+        return []
+    return [x["document"] for x in r.json() if "document" in x]
 
 # === KIỂM TRA ĐĂNG NHẬP ===
 if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
     st.warning("⚠️ Vui lòng đăng nhập trước khi vào mạng xã hội.")
     st.stop()
 
-# === LẤY THÔNG TIN TỪ PHIÊN (SESSION) ===
+# === LẤY THÔNG TIN NGƯỜI DÙNG ===
 username = st.session_state.get("user_name")
 email = st.session_state.get("user_email")
 avatar_url = st.session_state.get(
     "user_avatar",
     "https://cdn-icons-png.flaticon.com/512/149/149071.png"
 )
-
-# === DỰ PHÒNG: nếu thiếu dữ liệu thì truy Firestore ===
-if not username or not email:
-    user_doc = db.collection("users").where("email", "==", email or "").limit(1).get()
-    if user_doc:
-        user_data = user_doc[0].to_dict()
-        username = user_data.get("name", "Người dùng")
-        avatar_url = user_data.get(
-            "avatar",
-            "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-        )
-    else:
-        username = "Người dùng"
 
 # === THANH TRÊN (HEADER) ===
 st.markdown(
@@ -57,8 +87,8 @@ st.markdown(
 
 # === XỬ LÝ ĐĂNG XUẤT ===
 if "logout" in st.query_params:
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    for key_ in list(st.session_state.keys()):
+        del st.session_state[key_]
     st.success("Đã đăng xuất. Quay lại trang đăng nhập...")
     time.sleep(1)
     st.switch_page("pages/login.py")
@@ -72,17 +102,16 @@ content = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm x�
 
 if st.button("Đăng bài"):
     if content.strip():
-        db.collection("posts").add(
-            {
-                "user": username,
-                "email": email,
-                "avatar": avatar_url,
-                "content": content.strip(),
-                "timestamp": datetime.now(),
-            }
-        )
-        st.success("✅ Bài viết đã được đăng!")
-        st.experimental_rerun()
+        data = {
+            "user": username,
+            "email": email,
+            "avatar": avatar_url,
+            "content": content.strip(),
+            "timestamp": datetime.now().isoformat(),
+        }
+        if firestore_add("posts", data):
+            st.success("✅ Bài viết đã được đăng!")
+            st.rerun()
     else:
         st.warning("⚠️ Nội dung bài viết không được để trống.")
 
@@ -91,27 +120,36 @@ st.markdown("---")
 # === HIỂN THỊ BÀI VIẾT ===
 st.subheader("📰 Bảng tin")
 
-posts = db.collection("posts").order_by("timestamp", direction=firestore.Query.DESCENDING).get()
+posts = firestore_query("posts", order_by="timestamp", direction="DESCENDING")
 
 if not posts:
     st.info("Chưa có bài viết nào. Hãy là người đầu tiên đăng nhé!")
 else:
-    for post in posts:
-        data = post.to_dict()
-        time_posted = data["timestamp"].strftime("%H:%M %d/%m/%Y")
+    for p in posts:
+        fields = p["fields"]
+        user = fields["user"]["stringValue"]
+        avatar = fields["avatar"]["stringValue"]
+        content = fields["content"]["stringValue"]
+        time_posted = fields["timestamp"]["stringValue"]
+        # format lại thời gian nếu cần
+        try:
+            t = datetime.fromisoformat(time_posted)
+            time_posted = t.strftime("%H:%M %d/%m/%Y")
+        except:
+            pass
 
         st.markdown(
             f"""
             <div style='background-color: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 15px;
                         box-shadow: 0 2px 4px rgba(0,0,0,0.1);'>
                 <div style='display: flex; align-items: center; gap: 10px;'>
-                    <img src='{data["avatar"]}' width='40' height='40' style='border-radius:50%; border:1px solid #ddd;' />
+                    <img src='{avatar}' width='40' height='40' style='border-radius:50%; border:1px solid #ddd;' />
                     <div>
-                        <strong>{data["user"]}</strong><br>
+                        <strong>{user}</strong><br>
                         <span style='font-size:12px; color:gray;'>{time_posted}</span>
                     </div>
                 </div>
-                <p style='margin-top:10px; font-size:16px;'>{data["content"]}</p>
+                <p style='margin-top:10px; font-size:16px;'>{content}</p>
             </div>
             """,
             unsafe_allow_html=True,
