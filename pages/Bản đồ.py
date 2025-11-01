@@ -31,7 +31,7 @@ def get_all_requests():
             d = doc.to_dict()
             d["id"] = doc.id
             data.append(d)
-        st.success(f"✅ Đã tải {len(data)} yêu cầu cứu trợ từ Firestore.")
+        # st.success(f"✅ Đã tải {len(data)} yêu cầu cứu trợ từ Firestore.")
         return data
     except Exception as e:
         import traceback
