@@ -1,20 +1,13 @@
 import streamlit as st
 import json, os
 import cloudinary, cloudinary.uploader
-import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_rest import get_firestore_docs, add_firestore_doc
 from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(page_title="Bản đồ cứu trợ", layout="wide")
 st.title("🆘 BẢN ĐỒ CỨU TRỢ KHẨN CẤP")
 
-# ==================== KẾT NỐI FIREBASE ====================
-if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_key.json")
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-# ==================== CẤU HÌNH CLOUDINARY ====================
+# ==================== CLOUDINARY ====================
 cloudinary.config(
     cloud_name="dwrr9uwy1",
     api_key="258463696593724",
@@ -22,30 +15,23 @@ cloudinary.config(
     secure=True
 )
 
-# ==================== LẤY DỮ LIỆU FIRESTORE ====================
+# ==================== FIRESTORE ====================
 def get_all_requests():
     try:
-        docs = db.collection("rescue_requests").get()
-        data = []
-        for doc in docs:
-            d = doc.to_dict()
-            d["id"] = doc.id
-            data.append(d)
-        # st.success(f"✅ Đã tải {len(data)} yêu cầu cứu trợ từ Firestore.")
-        return data
+        return get_firestore_docs("rescue_requests")
     except Exception as e:
         import traceback
         st.error("🔥 Lỗi khi tải dữ liệu Firestore:")
         st.code(traceback.format_exc())
         return []
 
-# ==================== HIỂN THỊ BẢN ĐỒ ====================
+# ==================== BẢN ĐỒ ====================
 data = get_all_requests()
 center_lat = data[0]["lat"] if data else 10.762622
 center_lng = data[0]["lng"] if data else 106.660172
 
 api_key = "AIzaSyD4KVbyvfBHFpN_ZNn7RrmZG5Qw9C_VbgU"
-
+# --- HTML bản đồ giữ nguyên ---
 html_template = f"""
 <!DOCTYPE html>
 <html>
@@ -239,7 +225,7 @@ with st.form("rescue_form"):
                 upload_result = cloudinary.uploader.upload(img, folder="rescue_uploads", resource_type="image")
                 img_urls.append(upload_result["secure_url"])
 
-            db.collection("rescue_requests").add({
+            add_firestore_doc("rescue_requests", {
                 "name": name, "phone": phone, "note": note,
                 "address": address, "lat": lat, "lng": lng, "images": img_urls
             })
