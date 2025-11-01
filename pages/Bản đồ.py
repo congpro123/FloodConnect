@@ -27,6 +27,15 @@ def get_all_requests():
 
 # ==================== BẢN ĐỒ ====================
 data = get_all_requests()
+for d in data:
+    try:
+        d["lat"] = float(d["lat"])
+        d["lng"] = float(d["lng"])
+        # Nếu "images" là chuỗi JSON thì parse lại
+        if isinstance(d.get("images"), str):
+            d["images"] = json.loads(d["images"].replace("'", '"'))
+    except Exception:
+        pass
 center_lat = data[0]["lat"] if data else 10.762622
 center_lng = data[0]["lng"] if data else 106.660172
 
@@ -233,3 +242,4 @@ with st.form("rescue_form"):
             st.session_state.pop("lat", None)
             st.session_state.pop("lng", None)
             st.rerun()
+
