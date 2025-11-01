@@ -1,22 +1,13 @@
-# streamlit page title: Đăng nhập FloodConnect
 import streamlit as st
 from streamlit_option_menu import option_menu
-import firebase_admin
-from firebase_admin import credentials, firestore
 import time
+from firebase_rest import get_firestore_docs, add_firestore_doc
 
-# --- Cấu hình Firebase ---
-if not firebase_admin._apps:
-    cred = credentials.Certificate("firebase_key.json")
-    firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-# --- Cấu hình trang ---
 st.set_page_config(page_title="FloodConnect - Đăng nhập", layout="centered")
 
 VIDEO_URL = "https://res.cloudinary.com/dwrr9uwy1/video/upload/v1761737518/background_kou0uc.mp4"
 
-# --- CSS & Video nền ---
+# --- CSS & video nền ---
 st.markdown(f"""
     <style>
         * {{ box-sizing: border-box; }}
@@ -93,7 +84,6 @@ st.markdown(f"""
     </video>
 """, unsafe_allow_html=True)
 
-# --- Tabs ---
 with st.container():
     selected = option_menu(
         None, ["Đăng nhập", "Đăng ký tài khoản"],
@@ -112,21 +102,18 @@ if selected == "Đăng nhập":
         if not email or not password:
             st.warning("⚠️ Vui lòng nhập đầy đủ thông tin!")
         else:
-            user_doc = db.collection("users").where("email", "==", email).limit(1).get()
-            if user_doc:
-                user_data = user_doc[0].to_dict()
+            users = get_firestore_docs("users")
+            user_data = next((u for u in users if u.get("email") == email), None)
+            if user_data:
                 if user_data["password"] == password:
                     st.success("✅ Đăng nhập thành công!")
-
-                    # --- Lưu thông tin vào session ---
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_email"] = email
-                    st.session_state["user_role"] = user_data.get("role", "Ẩn danh")
-                    st.session_state["user_name"] = user_data.get("username", "Người dùng")
-                    st.session_state["user_avatar"] = user_data.get(
-                        "avatar", "https://cdn-icons-png.flaticon.com/512/149/149071.png"
-                    )
-
+                    st.session_state.update({
+                        "logged_in": True,
+                        "user_email": email,
+                        "user_role": user_data.get("role", "Ẩn danh"),
+                        "user_name": user_data.get("username", "Người dùng"),
+                        "user_avatar": user_data.get("avatar", "https://cdn-icons-png.flaticon.com/512/149/149071.png"),
+                    })
                     time.sleep(1)
                     st.switch_page("pages/Mạng xã hội mini.py")
                 else:
@@ -147,11 +134,11 @@ else:
         if not email or not username or not password:
             st.warning("⚠️ Vui lòng nhập đầy đủ thông tin!")
         else:
-            existing = db.collection("users").where("email", "==", email).limit(1).get()
-            if existing:
+            users = get_firestore_docs("users")
+            if any(u.get("email") == email for u in users):
                 st.error("🚫 Email này đã được đăng ký!")
             else:
-                db.collection("users").add({
+                add_firestore_doc("users", {
                     "email": email,
                     "username": username,
                     "password": password,
