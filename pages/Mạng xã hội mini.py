@@ -25,6 +25,160 @@ st.markdown(f"""
 
 st.markdown("---")
 
+# ===== SIDEBAR =====
+st.sidebar.markdown("## ⚙️ Cài đặt tài khoản")
+tab = st.sidebar.radio("", ["Trang chủ", "Cài đặt"])
+
+# ====== CÀI ĐẶT TÀI KHOẢN ======
+if tab == "Cài đặt":
+    st.subheader("Chỉnh sửa thông tin cá nhân")
+
+    # --- Khởi tạo state cơ bản nếu chưa có ---
+    if "profile_name" not in st.session_state:
+        st.session_state.profile_name = user_data.get("name", display_name)
+    if "profile_email" not in st.session_state:
+        st.session_state.profile_email = user_data.get("email", email)
+
+    # Các key widget chính (lat_value/lng_value) lưu mặc định trước khi tạo widget
+    if "lat_value" not in st.session_state:
+        try:
+            st.session_state.lat_value = float(user_data.get("lat", 0.0))
+        except Exception:
+            st.session_state.lat_value = 0.0
+    if "lng_value" not in st.session_state:
+        try:
+            st.session_state.lng_value = float(user_data.get("lng", 0.0))
+        except Exception:
+            st.session_state.lng_value = 0.0
+
+    # --- Nếu có pending tọa độ từ lần bấm trước, áp dụng NGAY LẬP TỨC trước khi tạo widget ---
+    # (quan trọng: phải nằm ở đây, trước khi gọi st.number_input(..., key="lat_value"))
+    if "pending_lat" in st.session_state and "pending_lng" in st.session_state:
+        # Gán vào key widget trước khi widget được khởi tạo
+        st.session_state.lat_value = float(st.session_state.pending_lat)
+        st.session_state.lng_value = float(st.session_state.pending_lng)
+        # Xoá pending để không lặp lại
+        del st.session_state["pending_lat"]
+        del st.session_state["pending_lng"]
+        # Không cần gọi rerun ở đây — tiếp tục flow để widget dùng giá trị mới
+
+    # --- Form nhập ---
+    name = st.text_input("Tên hiển thị", key="profile_name")
+    email_edit = st.text_input("Email", key="profile_email")
+    st.number_input("Vĩ độ", key="lat_value", format="%.6f")
+    st.number_input("Kinh độ", key="lng_value", format="%.6f")
+
+    # --- Nút lấy toạ độ ---
+    if st.button("📍 Lấy tọa độ hiện tại", key="btn_get_coords"):
+        js = """
+        new Promise((resolve) => {
+            navigator.geolocation.getCurrentPosition(
+                pos => resolve(JSON.stringify({
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude
+                })),
+                err => resolve("ERROR:" + err.message)
+            );
+        });
+        """
+        coords = streamlit_js_eval(js_expressions=js, key="get_coords")
+        if coords and not str(coords).startswith("ERROR"):
+            try:
+                d = json.loads(coords)
+                # LƯU VÀO pending — không chạm trực tiếp vào lat_value lúc này
+                st.session_state["pending_lat"] = d["lat"]
+                st.session_state["pending_lng"] = d["lng"]
+                st.success(f"✅ Lấy vị trí thành công: ({d['lat']:.6f}, {d['lng']:.6f})")
+                # Bắt buộc rerun để lần chạy kế tiếp gán pending -> widget trước khi render
+                st.rerun()
+            except Exception as e:
+                st.warning(f"⚠️ Lỗi xử lý dữ liệu định vị: {e}")
+        else:
+            st.warning("⚠️ Không thể lấy vị trí. Hãy đảm bảo bạn đã cho phép quyền truy cập định vị trình duyệt.")
+
+    st.markdown("### 🔔 Thông báo")
+    # hiển thị token hiện có (nếu có trong user_data)
+    current_token = user_data.get("fcm_token", None)
+    if "fcm_token" in st.session_state:
+        current_token = st.session_state.fcm_token
+
+    if current_token:
+        st.success("✅ Bạn đã bật thông báo (FCM token có).")
+        st.write("FCM token (rút gọn):", (current_token[:8] + "...") if isinstance(current_token, str) else current_token)
+        if st.button("Xóa token thông báo (tắt thông báo)"):
+            # remove token from Firestore
+            try:
+                if user_data.get("id"):
+                    update_firestore_doc("users", user_data["id"], {"fcm_token": ""})
+                st.session_state.pop("fcm_token", None)
+                st.success("Đã xóa token thông báo.")
+                time.sleep(0.8)
+                st.rerun()
+            except Exception as e:
+                st.error("Lỗi khi xóa token: " + str(e))
+    else:
+        st.info("Chưa cấp quyền thông báo hoặc chưa đăng ký token.")
+        if st.button("Kích hoạt thông báo (bật push)"):
+            # gọi JS function (firebase-messaging.js) requestNotificationPermission() — hàm này trả về token hoặc null
+            try:
+                js_code = "window.requestNotificationPermission && window.requestNotificationPermission()"
+                token = streamlit_js_eval(js_expressions=js_code, key="request_fcm")
+                # streamlit_js_eval trả về token (string) hoặc None
+                if token and not str(token).startswith("ERROR"):
+                    token_str = str(token)
+                    st.session_state.fcm_token = token_str
+                    st.success("✅ Lấy token thông báo thành công.")
+                    # Lưu token lên Firestore (patch user doc)
+                    try:
+                        if user_data.get("id"):
+                            update_firestore_doc("users", user_data["id"], {"fcm_token": token_str})
+                            st.success("✅ Đã lưu token lên server.")
+                        else:
+                            st.warning("Không tìm thấy user_id để lưu token.")
+                    except Exception as e:
+                        st.error("Lỗi lưu token lên Firestore: " + str(e))
+                else:
+                    st.warning("⚠️ Không nhận được token (người dùng có thể đã từ chối).")
+            except Exception as e:
+                st.error("Lỗi khi gọi JS lấy token: " + str(e))
+
+    st.markdown("---")
+
+    # --- Lưu thay đổi ---
+    if st.button("💾 Lưu thay đổi", key="btn_save_profile"):
+        password_keep = user_data.get("password", "")
+        role_keep = user_data.get("role", "Ẩn danh")
+        avatar_keep = user_data.get("avatar", avatar_url)
+
+        # gather values (use current session_state keys)
+        lat_to_save = float(st.session_state.get("lat_value", 0.0))
+        lng_to_save = float(st.session_state.get("lng_value", 0.0))
+        name_to_save = st.session_state.get("profile_name", name)
+        email_to_save = st.session_state.get("profile_email", email_edit)
+
+        try:
+            if user_data.get("id"):
+                update_firestore_doc("users", user_data["id"], {
+                    "name": name_to_save,
+                    "email": email_to_save,
+                    "lat": lat_to_save,
+                    "lng": lng_to_save,
+                    "avatar": avatar_keep,
+                    "password": password_keep,
+                    "role": role_keep,
+                })
+                # Đồng bộ session với thay đổi tên/email
+                st.session_state.user_name = name_to_save
+                st.session_state.user_email = email_to_save
+                st.success("✅ Cập nhật thành công!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Không tìm thấy user_id để cập nhật.")
+        except Exception as e:
+            st.error("Lỗi khi cập nhật lên Firestore: " + str(e))
+
+
 # ===== ĐĂNG BÀI =====
 st.subheader("🖋️ Đăng bài mới")
 content = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm xúc của bạn...")
@@ -63,3 +217,4 @@ else:
             <p style='margin-top:10px; font-size:16px;'>{post.get("content")}</p>
         </div>
         """, unsafe_allow_html=True)
+
