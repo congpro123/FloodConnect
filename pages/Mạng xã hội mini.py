@@ -4,18 +4,62 @@ import time
 from firebase_rest import get_firestore_docs, add_firestore_doc, update_firestore_doc
 import json
 from streamlit_js_eval import streamlit_js_eval
+from session_manager import init_session
+from streamlit_cookies_manager import EncryptedCookieManager
+from urllib.parse import urlparse, parse_qs
+st.set_page_config(page_title="FloodConnect - Đăng nhập", layout="centered")
+# ======================================================
+#  COOKIE MANAGER
+# ======================================================
+cookies = EncryptedCookieManager(
+    prefix="floodconnect_",
+    password="super-secret-key-123",
+)
 
+if not cookies.ready():
+    st.stop()
+
+
+# ======================================================
+#  1️⃣ INIT SESSION TRƯỚC (ĐỂ KHÔNG GHI ĐÈ COOKIE SAU)
+# ======================================================
+init_session()
+
+
+# ======================================================
+#  2️⃣ KHÔI PHỤC TỪ COOKIE
+# ======================================================
+auth_token = cookies.get("auth_token")
+
+if auth_token:
+    st.session_state.logged_in = True
+    st.session_state.user_id = cookies.get("user_id")
+    st.session_state.user_name = cookies.get("user_name")
+    st.session_state.user_role = cookies.get("user_role")
+    st.session_state.user_email = cookies.get("user_email")
+# st.write("===== DEBUG SESSION =====")
+# for k, v in st.session_state.items():
+#     st.write(k, ":", v)
+
+# st.write("===== DEBUG COOKIES =====")
+# for key in ["auth_token","user_id","user_name","user_role","user_email"]:
+#     st.write(key, ":", cookies.get(key))
+# ======================================================
+#  PAGE CONFIG
+# ======================================================
 st.set_page_config(page_title="Mạng Xã Hội Mini", layout="centered")
 
-# === KIỂM TRA ĐĂNG NHẬP ===
-if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
-    st.warning("⚠️ Vui lòng đăng nhập trước khi vào mạng xã hội.")
+# ======================================================
+#  KIỂM TRA LOGIN
+# ======================================================
+if not st.session_state.logged_in:
+    st.warning("⚠️ Bạn chưa đăng nhập. Vui lòng quay lại trang đăng nhập.")
     st.stop()
 
 # session info
 username = st.session_state.get("user_name")
 email = st.session_state.get("user_email")
-avatar_url = st.session_state.get("user_avatar", "https://cdn-icons-png.flaticon.com/512/149/149071.png")
+avatar_url = "https://cdn-icons-png.flaticon.com/512/149/149071.png"
 
 # === LẤY DỮ LIỆU NGƯỜI DÙNG ===
 all_users = get_firestore_docs("users")
@@ -28,8 +72,48 @@ display_name = user_data.get("name") or user_data.get("username") or username or
 st.sidebar.markdown("## ⚙️ Cài đặt tài khoản")
 tab = st.sidebar.radio("", ["Trang chủ", "Cài đặt"])
 
+
+def logout(cookies: EncryptedCookieManager):
+    # ===== 1️⃣ XÓA SESSION STATE =====
+    keys_to_clear = [
+        "logged_in",
+        "user_id",
+        "user_name",
+        "user_role",
+        "user_email",
+        "user_avatar",
+        "fcm_token",
+        "profile_name",
+        "profile_email",
+        "lat_value",
+        "lng_value",
+        "pending_lat",
+        "pending_lng",
+    ]
+    for k in keys_to_clear:
+        if k in st.session_state:
+            del st.session_state[k]
+
+    # ===== 2️⃣ XÓA COOKIES QUAN TRỌNG =====
+    cookies_to_clear = [
+        "auth_token",
+        "user_id",
+        "user_name",
+        "user_role",
+        "user_email",
+        "user_avatar",
+        "EncryptedCookieManager.key_params",
+    ]
+    for ck in cookies_to_clear:
+        cookies[ck] = ""
+    cookies.save()
+
+    # ===== 3️⃣ Rerun app → về trang đăng nhập =====
+    st.rerun()
 # ====== CÀI ĐẶT TÀI KHOẢN ======
 if tab == "Cài đặt":
+    if st.button("🔒 Đăng xuất"):
+        logout(cookies)
     st.subheader("Chỉnh sửa thông tin cá nhân")
 
     # --- Khởi tạo state cơ bản nếu chưa có ---
@@ -177,9 +261,12 @@ if tab == "Cài đặt":
         except Exception as e:
             st.error("Lỗi khi cập nhật lên Firestore: " + str(e))
 
-
-# ===== HEADER =====
+# ===== HEADER + LOGOUT =====
 current_display_name = st.session_state.get("user_name", display_name)
+avatar_url = "https://cdn-icons-png.flaticon.com/512/149/149071.png"
+
+
+# ===== HEADER UI =====
 st.markdown(
     f"""
     <div style='display: flex; justify-content: space-between; align-items: center;
@@ -189,12 +276,6 @@ st.markdown(
         <div style='display: flex; align-items: center; gap: 10px;'>
             <img src='{avatar_url}' width='40' height='40' style='border-radius:50%; border:2px solid white;' />
             <span style='font-size: 18px; font-weight: 500;'>{current_display_name}</span>
-            <form action="?logout=true" method="get">
-                <button type="submit" style='background-color:#fff; color:#1a73e8;
-                    border:none; border-radius:8px; padding:6px 12px; cursor:pointer; font-weight:600;'>
-                    Đăng xuất
-                </button>
-            </form>
         </div>
     </div>
     """,
@@ -209,12 +290,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# === ĐĂNG XUẤT ===
-if "logout" in st.query_params:
-    st.session_state.clear()
-    st.success("Đã đăng xuất. Quay lại trang đăng nhập...")
-    time.sleep(1)
-    st.switch_page("pages/Đăng nhập.py")
 
 st.markdown("---")
 
