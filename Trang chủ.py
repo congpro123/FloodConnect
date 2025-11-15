@@ -17,8 +17,6 @@ def get_base64_image(path):
         return base64.b64encode(f.read()).decode()
 
 # --- Ảnh ---
-left_img = get_base64_image("assets/left.png")
-right_img = get_base64_image("assets/right.png")
 
 # --- Video nền ---
 VIDEO_URL = "https://res.cloudinary.com/dwrr9uwy1/video/upload/v1761737518/background_kou0uc.mp4"
@@ -27,7 +25,7 @@ VIDEO_URL = "https://res.cloudinary.com/dwrr9uwy1/video/upload/v1761737518/backg
 st.markdown(f"""
     <style>
         .block-container {{
-            max-width: 89% !important;
+            max-width: 100% !important;
             padding-left: 5rem !important;
             padding-right: 5rem !important;
             position: relative;
@@ -60,7 +58,7 @@ st.markdown(f"""
             animation: fadeInDown 1.2s ease;
             z-index: 2;
             position: relative;
-            gap: 20px;
+            gap: 0px;
             flex-wrap: nowrap;
         }}
 
@@ -175,9 +173,7 @@ st.markdown(f"""
 # --- Tiêu đề chính ---
 st.markdown(f"""
 <div class="title-container">
-    <img src="data:image/png;base64,{left_img}">
     <h1 class="title-text">Chào mừng bạn đến với FloodConnect!</h1>
-    <img src="data:image/png;base64,{right_img}">
 </div>
 """, unsafe_allow_html=True)
 
@@ -195,7 +191,7 @@ with col1:
 with col2:
     if st.button("🤝 Tình nguyện viên"):
         st.session_state["role"] = "Supporter"
-        st.switch_page("pages/Bản đồ.py")
+        st.switch_page("pages/Đăng nhập.py")
 
 with col3:
     if st.button("🏠 Người dân vùng lũ"):
@@ -206,3 +202,34 @@ with col4:
     if st.button("🆘 Tôi là người cần cứu trợ"):
         st.query_params["scroll"] = ["form"]
         st.switch_page("pages/Bản đồ.py")
+
+st.markdown("<h2>ABOUT</h2>", unsafe_allow_html=True)
+
+st.markdown(f"""
+<div class="login-banner">
+    <p>
+        FloodConnect là nền tảng web và ứng dụng di động được thiết kế để hỗ trợ cộng đồng 
+        và các lực lượng cứu trợ trong các vùng bị ảnh hưởng bởi lũ lụt tại Việt Nam. 
+        Sử dụng bản đồ hành chính Việt Nam mới nhất, FloodConnect hiển thị trực quan các 
+        khu vực đang chịu tác động của mưa lũ, giúp người dân, chính quyền và các tình nguyện viên 
+        có thể nắm bắt tình hình nhanh chóng và chính xác.
+    </p>
+</div>
+
+<style>
+.login-banner {{
+    width: 80%; max-width: 900px;
+    margin: 3vh auto 5vh auto;
+    padding: 30px 50px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(18px);
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    position: relative; z-index: 2;
+    color: #cce5ff; /* giống màu chữ tiêu đề */
+    font-size: 1.1em;
+    line-height: 1.6em;
+}}
+</style>
+""", unsafe_allow_html=True)
