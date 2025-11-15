@@ -1,29 +1,28 @@
 import streamlit as st
 from datetime import datetime
-from firebase_rest import get_firestore_docs, add_firestore_doc
 import time
+from firebase_rest import get_firestore_docs, add_firestore_doc, update_firestore_doc
+import json
+from streamlit_js_eval import streamlit_js_eval
 
-st.set_page_config(page_title="MXH Mini", layout="wide")
+st.set_page_config(page_title="Mạng Xã Hội Mini", layout="centered")
 
-# ===== KIỂM TRA ĐĂNG NHẬP =====
-if not st.session_state.get("logged_in", False):
-    st.warning("⚠️ Vui lòng đăng nhập trước!")
+# === KIỂM TRA ĐĂNG NHẬP ===
+if "logged_in" not in st.session_state or not st.session_state["logged_in"]:
+    st.warning("⚠️ Vui lòng đăng nhập trước khi vào mạng xã hội.")
     st.stop()
 
-# ===== HEADER =====
-st.markdown(f"""
-<div style='display:flex; justify-content:space-between; align-items:center;
-            background-color:#1a73e8; padding:10px 20px; border-radius:10px;
-            color:white;'>
-    <div style='font-size:24px; font-weight:bold;'>📘 Mạng Xã Hội Mini</div>
-    <div style='display:flex; align-items:center; gap:10px;'>
-        <img src='{st.session_state.user_avatar}' width='40' height='40' style='border-radius:50%; border:2px solid white;'/>
-        <span style='font-size:18px; font-weight:500;'>{st.session_state.user_name}</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# session info
+username = st.session_state.get("user_name")
+email = st.session_state.get("user_email")
+avatar_url = st.session_state.get("user_avatar", "https://cdn-icons-png.flaticon.com/512/149/149071.png")
 
-st.markdown("---")
+# === LẤY DỮ LIỆU NGƯỜI DÙNG ===
+all_users = get_firestore_docs("users")
+user_data = next((u for u in all_users if u.get("email") == email), {})  # tìm user theo email
+
+# Tên hiển thị (fallback khi user chưa đặt name)
+display_name = user_data.get("name") or user_data.get("username") or username or "Người dùng"
 
 # ===== SIDEBAR =====
 st.sidebar.markdown("## ⚙️ Cài đặt tài khoản")
@@ -179,42 +178,94 @@ if tab == "Cài đặt":
             st.error("Lỗi khi cập nhật lên Firestore: " + str(e))
 
 
-# ===== ĐĂNG BÀI =====
-st.subheader("🖋️ Đăng bài mới")
-content = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm xúc của bạn...")
-if st.button("Đăng bài"):
-    if content.strip():
-        add_firestore_doc("posts", {
-            "user": st.session_state.user_name,
-            "email": st.session_state.user_email,
-            "avatar": st.session_state.user_avatar,
-            "content": content.strip(),
-            "timestamp": datetime.now().isoformat()
-        })
-        st.success("✅ Bài viết đã được đăng!")
-        st.experimental_rerun()
-    else:
-        st.warning("⚠️ Nội dung không được để trống.")
+# ===== HEADER =====
+current_display_name = st.session_state.get("user_name", display_name)
+st.markdown(
+    f"""
+    <div style='display: flex; justify-content: space-between; align-items: center;
+                background-color: #1a73e8; padding: 10px 20px; border-radius: 10px;
+                color: white;'>
+        <div style='font-size: 24px; font-weight: bold;'>📘 Mạng Xã Hội Mini</div>
+        <div style='display: flex; align-items: center; gap: 10px;'>
+            <img src='{avatar_url}' width='40' height='40' style='border-radius:50%; border:2px solid white;' />
+            <span style='font-size: 18px; font-weight: 500;'>{current_display_name}</span>
+            <form action="?logout=true" method="get">
+                <button type="submit" style='background-color:#fff; color:#1a73e8;
+                    border:none; border-radius:8px; padding:6px 12px; cursor:pointer; font-weight:600;'>
+                    Đăng xuất
+                </button>
+            </form>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# nhúng script để có window.requestNotificationPermission (file bạn đã tạo)
+st.markdown(
+    """
+    <script src="/firebase-messaging.js"></script>
+    """,
+    unsafe_allow_html=True
+)
+
+# === ĐĂNG XUẤT ===
+if "logout" in st.query_params:
+    st.session_state.clear()
+    st.success("Đã đăng xuất. Quay lại trang đăng nhập...")
+    time.sleep(1)
+    st.switch_page("pages/Đăng nhập.py")
 
 st.markdown("---")
 
-# ===== HIỂN THỊ BÀI VIẾT =====
-st.subheader("📰 Bảng tin")
-posts = sorted(get_firestore_docs("posts"), key=lambda x: x.get("timestamp",""), reverse=True)
-if not posts:
-    st.info("Chưa có bài viết nào.")
-else:
-    for post in posts:
-        time_posted = post.get("timestamp","")[:16].replace("T"," ")
-        st.markdown(f"""
-        <div style='background-color:#8a02de; padding:15px; border-radius:12px; margin-bottom:15px;
-                    box-shadow:0 2px 4px rgba(0,0,0,0.1); color:white;'>
-            <div style='display:flex; align-items:center; gap:10px;'>
-                <img src='{post.get("avatar")}' width='40' height='40' style='border-radius:50%; border:1px solid #ddd;'/>
-                <div><strong>{post.get("user")}</strong><br>
-                <span style='font-size:12px; color:#eee;'>{time_posted}</span></div>
-            </div>
-            <p style='margin-top:10px; font-size:16px;'>{post.get("content")}</p>
-        </div>
-        """, unsafe_allow_html=True)
+# ===== TRANG CHỦ =====
+if tab == "Trang chủ":
+    st.subheader("🖋️ Đăng bài mới")
 
+    content = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm xúc của bạn...")
+
+    if st.button("Đăng bài", key="btn_post"):
+        if content.strip():
+            try:
+                add_firestore_doc("posts", {
+                    "user": st.session_state.get("user_name") or display_name,
+                    "email": st.session_state.get("user_email") or email,
+                    "avatar": avatar_url,
+                    "content": content.strip(),
+                    "timestamp": datetime.now().isoformat(),
+                })
+                st.success("✅ Bài viết đã được đăng!")
+                st.rerun()
+            except Exception as e:
+                st.error("Lỗi khi đăng bài: " + str(e))
+        else:
+            st.warning("⚠️ Nội dung bài viết không được để trống.")
+
+    st.markdown("---")
+
+    # === HIỂN THỊ BÀI VIẾT ===
+    st.subheader("📰 Bảng tin")
+
+    posts = sorted(get_firestore_docs("posts"), key=lambda x: x.get("timestamp", ""), reverse=True)
+
+    if not posts:
+        st.info("Chưa có bài viết nào. Hãy là người đầu tiên đăng nhé!")
+    else:
+        for post in posts:
+            time_posted = post.get("timestamp", "")[:16].replace("T", " ")
+            st.markdown(
+                f"""
+                <div style='background-color: #8a02de; padding: 15px; border-radius: 12px; margin-bottom: 15px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1); color:white;' >
+                    <div style='display: flex; align-items: center; gap: 10px;'>
+                        <img src='{post.get("avatar", avatar_url)}' width='40' height='40' style='border-radius:50%; border:1px solid #ddd;' />
+                        <div>
+                            <strong>{post.get("user", "Ẩn danh")}</strong><br>
+                            <span style='font-size:12px; color:#eee;'>{time_posted}</span>
+                        </div>
+                    </div>
+                    <p style='margin-top:10px; font-size:16px;'>{post.get("content","")}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
