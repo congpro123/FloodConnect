@@ -118,13 +118,22 @@ st.markdown(f"""
 # ======================================================
 #  MENU
 # ======================================================
+# Khởi tạo tab hiện tại
+if "current_tab" not in st.session_state:
+    st.session_state.current_tab = "Đăng nhập"
+
+# Render menu
 selected = option_menu(
     None,
     ["Đăng nhập", "Đăng ký tài khoản"],
     icons=["box-arrow-in-right", "person-plus"],
-    default_index=0,
     orientation="horizontal",
+    key="main_menu"  # TẠO KEY CỐ ĐỊNH
 )
+
+# Chỉ cập nhật khi user click => không bị double click bug
+if selected != st.session_state.current_tab:
+    st.session_state.current_tab = selected
 
 
 # ======================================================
@@ -175,29 +184,106 @@ if selected == "Đăng nhập":
 #  ĐĂNG KÝ TÀI KHOẢN
 # ======================================================
 else:
+
+    # Khởi tạo biến trạng thái
+    if "signup_success" not in st.session_state:
+        st.session_state.signup_success = False
+    if "pending_lat" not in st.session_state:
+        st.session_state.pending_lat = None
+    if "pending_lng" not in st.session_state:
+        st.session_state.pending_lng = None
+
     st.markdown("<div class='login-banner'><h2>📝 Tạo tài khoản mới</h2>", unsafe_allow_html=True)
 
     email = st.text_input("📧 Nhập email:")
     username = st.text_input("🧑 Nhập tên:")
     password = st.text_input("🔒 Nhập mật khẩu:", type="password")
-    role = st.selectbox("🎭 Vai trò", ["Nhà hảo tâm", "Tình nguyện viên", "Người dân vùng lũ"])
 
-    if st.button("Tạo tài khoản"):
+    role = st.selectbox(
+        "🎭 Vai trò",
+        ["Nhà hảo tâm", "Tình nguyện viên", "Người dân vùng lũ"],
+        key="role_select"
+    )
+
+    # ======================================================
+    #  NÚT LẤY TỌA ĐỘ CHỈ HIỆN KHI LÀ TÌNH NGUYỆN VIÊN
+    # ======================================================
+    import json
+    from streamlit_js_eval import streamlit_js_eval
+
+    if role == "Tình nguyện viên":
+
+        st.markdown("### 📌 Vị trí hoạt động")
+
+        # Nếu đã có toạ độ trong session → hiển thị
+        if st.session_state.pending_lat and st.session_state.pending_lng:
+            st.info(f"📍 Tọa độ đã lưu: **({st.session_state.pending_lat}, {st.session_state.pending_lng})**")
+
+        if st.button("📍 Lấy tọa độ hiện tại", key="btn_get_coords"):
+            js = """
+            new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    pos => resolve(JSON.stringify({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude
+                    })),
+                    err => resolve("ERROR:" + err.message)
+                );
+            });
+            """
+            coords = streamlit_js_eval(js_expressions=js, key="get_coords")
+
+            if coords and not str(coords).startswith("ERROR"):
+                try:
+                    d = json.loads(coords)
+
+                    # Lưu vào session state
+                    st.session_state.pending_lat = d["lat"]
+                    st.session_state.pending_lng = d["lng"]
+
+                    st.success(f"✅ Lấy vị trí thành công: ({d['lat']:.6f}, {d['lng']:.6f})")
+
+                    st.rerun()
+
+                except Exception as e:
+                    st.warning(f"⚠️ Lỗi xử lý dữ liệu định vị: {e}")
+
+            else:
+                st.warning("⚠️ Không thể lấy vị trí. Hãy đảm bảo bạn đã cho phép quyền truy cập định vị trình duyệt.")
+
+    # ======================================================
+    #  XỬ LÝ TẠO TÀI KHOẢN
+    # ======================================================
+    if st.button("Tạo tài khoản", key="btn_create_acc"):
+
         if not email or not username or not password:
             st.warning("⚠️ Vui lòng nhập đầy đủ!")
+            st.session_state.signup_success = False
+
         else:
             users = get_firestore_docs("users")
+
             if any(u.get("email") == email for u in users):
                 st.error("🚫 Email đã tồn tại!")
+                st.session_state.signup_success = False
+
             else:
-                add_firestore_doc("users", {
+
+                user_payload = {
                     "email": email,
                     "username": username,
                     "password": password,
                     "role": role
-                })
-                st.success("🎉 Tạo tài khoản thành công!")
-                time.sleep(1.5)
-                st.rerun()
+                }
+
+                # Nếu là tình nguyện viên → thêm toạ độ
+                if role == "Tình nguyện viên":
+                    user_payload["lat"] = st.session_state.pending_lat
+                    user_payload["lng"] = st.session_state.pending_lng
+
+                # Ghi Firestore
+                add_firestore_doc("users", user_payload)
+
+                st.success("🎉 Tạo tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ!")
 
     st.markdown("</div>", unsafe_allow_html=True)
