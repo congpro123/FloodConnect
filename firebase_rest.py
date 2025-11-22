@@ -97,7 +97,26 @@ def get_firestore_docs(collection: str):
 
 
 # ======================================================
-# 4) FIRESTORE → THÊM DOCUMENT (AUTO-ID)
+# Chuyển Python object sang Firestore field value
+# ======================================================
+def convert_to_firestore_value(v):
+    """Chuyển Python object sang Firestore field value Firestore"""
+    if isinstance(v, str):
+        return {"stringValue": v}
+    elif isinstance(v, bool):
+        return {"booleanValue": v}
+    elif isinstance(v, (int, float)):
+        return {"doubleValue": v}
+    elif isinstance(v, list):
+        return {"arrayValue": {"values": [convert_to_firestore_value(x) for x in v]}}
+    elif isinstance(v, dict):
+        return {"mapValue": {"fields": {k: convert_to_firestore_value(val) for k, val in v.items()}}}
+    else:
+        # fallback: lưu dưới dạng string
+        return {"stringValue": str(v)}
+
+# ======================================================
+# FIRESTORE → THÊM DOCUMENT (AUTO-ID)
 # ======================================================
 def add_firestore_doc(collection: str, data: dict):
     key = get_key()
@@ -105,7 +124,7 @@ def add_firestore_doc(collection: str, data: dict):
 
     url = f"https://firestore.googleapis.com/v1/projects/{key['project_id']}/databases/(default)/documents/{collection}"
 
-    fields = {k: {"stringValue": str(v)} for k, v in data.items()}
+    fields = {k: convert_to_firestore_value(v) for k, v in data.items()}
 
     r = requests.post(url, headers={"Authorization": f"Bearer {token}"}, json={"fields": fields})
 
@@ -114,9 +133,8 @@ def add_firestore_doc(collection: str, data: dict):
 
     return r.json()
 
-
 # ======================================================
-# 5) FIRESTORE → UPDATE DOCUMENT (PATCH)
+# FIRESTORE → UPDATE DOCUMENT (PATCH)
 # ======================================================
 def update_firestore_doc(collection: str, doc_id: str, data: dict):
     key = get_key()
@@ -124,15 +142,15 @@ def update_firestore_doc(collection: str, doc_id: str, data: dict):
 
     url = f"https://firestore.googleapis.com/v1/projects/{key['project_id']}/databases/(default)/documents/{collection}/{doc_id}"
 
-    fields = {k: {"stringValue": str(v)} for k, v in data.items()}
+    fields = {k: convert_to_firestore_value(v) for k, v in data.items()}
+    field_paths = "&".join(f"updateMask.fieldPaths={k}" for k in data.keys())
 
-    r = requests.patch(url, headers={"Authorization": f"Bearer {token}"}, json={"fields": fields})
+    r = requests.patch(f"{url}?{field_paths}", headers={"Authorization": f"Bearer {token}"}, json={"fields": fields})
 
     if not r.ok:
         raise RuntimeError(f"❌ Lỗi cập nhật tài liệu: {r.status_code} - {r.text}")
 
     return r.json()
-
 
 # ======================================================
 # 6) FIREBASE CLOUD MESSAGING – PUSH NOTIFICATION
