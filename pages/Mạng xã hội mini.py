@@ -71,7 +71,14 @@ display_name = user_data.get("name") or user_data.get("username") or username or
 # ===== SIDEBAR =====
 st.sidebar.markdown("## ⚙️ Cài đặt tài khoản")
 tab = st.sidebar.radio("", ["Trang chủ", "Cài đặt"])
-
+# nhúng script để có window.requestNotificationPermission (file bạn đã tạo)
+st.markdown("""
+<script>
+window.addEventListener('message', (e) => {
+    if(e.data.type === 'debug') console.log('FROM IFRAME:', e.data.msg);
+});
+</script>
+""", unsafe_allow_html=True)
 
 def logout(cookies: EncryptedCookieManager):
     # ===== 1️⃣ XÓA SESSION STATE =====
@@ -205,7 +212,7 @@ if tab == "Cài đặt":
             # gọi JS function (firebase-messaging.js) requestNotificationPermission() — hàm này trả về token hoặc null
             try:
                 js_code = "window.requestNotificationPermission && window.requestNotificationPermission()"
-                token = streamlit_js_eval(js_expressions=js_code, key="request_fcm")
+                token = streamlit_js_eval(js_expressions="window.requestNotificationPermission()")
                 # streamlit_js_eval trả về token (string) hoặc None
                 if token and not str(token).startswith("ERROR"):
                     token_str = str(token)
@@ -282,13 +289,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# nhúng script để có window.requestNotificationPermission (file bạn đã tạo)
-st.markdown(
-    """
-    <script src="/firebase-messaging.js"></script>
-    """,
-    unsafe_allow_html=True
-)
 
 
 st.markdown("---")
@@ -344,3 +344,4 @@ if tab == "Trang chủ":
                 """,
                 unsafe_allow_html=True,
             )
+
