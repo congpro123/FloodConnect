@@ -186,52 +186,6 @@ if tab == "Cài đặt":
         else:
             st.warning("⚠️ Không thể lấy vị trí. Hãy đảm bảo bạn đã cho phép quyền truy cập định vị trình duyệt.")
 
-    st.markdown("### 🔔 Thông báo")
-    # hiển thị token hiện có (nếu có trong user_data)
-    current_token = user_data.get("fcm_token", None)
-    if "fcm_token" in st.session_state:
-        current_token = st.session_state.fcm_token
-
-    if current_token:
-        st.success("✅ Bạn đã bật thông báo (FCM token có).")
-        st.write("FCM token (rút gọn):", (current_token[:8] + "...") if isinstance(current_token, str) else current_token)
-        if st.button("Xóa token thông báo (tắt thông báo)"):
-            # remove token from Firestore
-            try:
-                if user_data.get("id"):
-                    update_firestore_doc("users", user_data["id"], {"fcm_token": ""})
-                st.session_state.pop("fcm_token", None)
-                st.success("Đã xóa token thông báo.")
-                time.sleep(0.8)
-                st.rerun()
-            except Exception as e:
-                st.error("Lỗi khi xóa token: " + str(e))
-    else:
-        st.info("Chưa cấp quyền thông báo hoặc chưa đăng ký token.")
-        if st.button("Kích hoạt thông báo (bật push)"):
-            # gọi JS function (firebase-messaging.js) requestNotificationPermission() — hàm này trả về token hoặc null
-            try:
-                js_code = "window.requestNotificationPermission && window.requestNotificationPermission()"
-                token = streamlit_js_eval(js_expressions="window.requestNotificationPermission()")
-                # streamlit_js_eval trả về token (string) hoặc None
-                if token and not str(token).startswith("ERROR"):
-                    token_str = str(token)
-                    st.session_state.fcm_token = token_str
-                    st.success("✅ Lấy token thông báo thành công.")
-                    # Lưu token lên Firestore (patch user doc)
-                    try:
-                        if user_data.get("id"):
-                            update_firestore_doc("users", user_data["id"], {"fcm_token": token_str})
-                            st.success("✅ Đã lưu token lên server.")
-                        else:
-                            st.warning("Không tìm thấy user_id để lưu token.")
-                    except Exception as e:
-                        st.error("Lỗi lưu token lên Firestore: " + str(e))
-                else:
-                    st.warning("⚠️ Không nhận được token (người dùng có thể đã từ chối).")
-            except Exception as e:
-                st.error("Lỗi khi gọi JS lấy token: " + str(e))
-
     st.markdown("---")
 
     # --- Lưu thay đổi ---
