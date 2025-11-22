@@ -3,19 +3,39 @@ import streamlit as st
 import base64
 import os
 import streamlit.components.v1 as components
+from streamlit.components.v1 import html
+import pathlib
 
 st.set_page_config(
     page_title="Mạng Xã Hội · FloodConnect",
     page_icon="🌐",
     layout="wide"
 )
-
+st.markdown("""
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+    .then(reg => {
+        console.log('[SW] Registered:', reg);
+        window.swRegistered = true;
+    })
+    .catch(err => console.error('[SW] Register failed:', err));
+} else {
+    console.warn('Service Worker not supported');
+}
+</script>
+""", unsafe_allow_html=True)
 # --- Caching hình ảnh ---
 @st.cache_data(show_spinner=False)
 def get_base64_image(path):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
-
+# Serve service worker
+sw_path = pathlib.Path("firebase-messaging-sw.js")
+if sw_path.exists():
+    with open(sw_path, "r") as f:
+        sw_code = f.read()
+    html(f"<script>{sw_code}</script>", height=0)
 # --- Ảnh ---
 
 # --- Video nền ---
@@ -218,7 +238,7 @@ st.markdown(f"""
 
 <style>
 .login-banner {{
-    width: 80%; max-width: 900px;
+    width: 100%; max-width: 1000px;
     margin: 3vh auto 5vh auto;
     padding: 30px 50px;
     background: rgba(15, 23, 42, 0.6);
