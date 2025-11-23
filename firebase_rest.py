@@ -213,3 +213,41 @@ def distance_km(lat1, lng1, lat2, lng2):
     c = 2 * atan2(sqrt(a), sqrt(1-a))
 
     return R * c
+# ======================================================
+# 8) FIRESTORE → DELETE DOCUMENT
+# ======================================================
+def delete_firestore_doc(collection: str, doc_id: str):
+    key = get_key()
+    token = get_access_token()
+
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{key['project_id']}"
+        f"/databases/(default)/documents/{collection}/{doc_id}"
+    )
+
+    r = requests.delete(url, headers={"Authorization": f"Bearer {token}"})
+
+    if not r.ok:
+        raise RuntimeError(f"❌ Lỗi xoá tài liệu: {r.status_code} - {r.text}")
+
+    return True
+
+# ======================================================
+# 9) XOÁ ẢNH CLOUDINARY
+# ======================================================
+import cloudinary
+import cloudinary.uploader
+
+def delete_cloudinary_image(url: str):
+    """
+    Xoá ảnh Cloudinary từ URL gốc.
+    URL dạng:
+    https://res.cloudinary.com/<cloud_name>/image/upload/v123456789/abcxyz.jpg
+    → public_id = 'abcxyz'
+    """
+    try:
+        public_id = url.split("/")[-1].split(".")[0]   # lấy abcxyz
+        res = cloudinary.uploader.destroy(public_id)
+        return res
+    except Exception as e:
+        raise RuntimeError(f"❌ Lỗi xoá ảnh Cloudinary: {e}")
