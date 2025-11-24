@@ -305,9 +305,9 @@ else:
                 c_content = c.get("content", "")
                 c_time = format_time(c.get("timestamp", ""))
 
-                cols = st.columns([0.06, 0.86, 0.08])
+                cols = st.columns([0.0, 0.86, 0.05])
                 with cols[0]:
-                    st.image(c_avatar, width=30)
+                    st.image(c_avatar, width=100)
                 with cols[1]:
                     st.markdown(f"""
                     <div style='background:#2196f3;padding:6px 10px;border-radius:8px;color:white;'>
