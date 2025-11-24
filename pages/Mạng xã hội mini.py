@@ -1,8 +1,9 @@
-# FloodConnect Mini - Streamlit
+# Mạng xã hội mini — FloodConnect (single-file, full features, comment hiển thị)
 import streamlit as st
 from datetime import datetime
 import time
 import json
+from typing import List, Dict, Any
 from firebase_rest import (
     get_firestore_docs,
     add_firestore_doc,
@@ -15,9 +16,9 @@ from streamlit_cookies_manager import EncryptedCookieManager
 import cloudinary
 import cloudinary.uploader
 
-# ==========================
-# CLOUDINARY CONFIG
-# ==========================
+# ---------------------------
+# CONFIGS
+# ---------------------------
 cloudinary.config(
     cloud_name="dwrr9uwy1",
     api_key="258463696593724",
@@ -25,121 +26,158 @@ cloudinary.config(
     secure=True
 )
 
-# ==========================
-# PAGE CONFIG
-# ==========================
-st.set_page_config(page_title="FloodConnect - Mạng Xã Hội Mini", layout="centered")
+st.set_page_config(page_title="FloodConnect - Mạng Xã Hội Mini", layout="wide")
 
-# ==========================
-# COOKIE MANAGER
-# ==========================
-cookies = EncryptedCookieManager(
-    prefix="floodconnect_",
-    password="super-secret-key-123",
-)
+# ---------------------------
+# COOKIE + SESSION
+# ---------------------------
+cookies = EncryptedCookieManager(prefix="floodconnect_", password="super-secret-key-123")
 if not cookies.ready():
     st.stop()
-
-# ==========================
-# INIT SESSION
-# ==========================
 init_session()
 
-# ==========================
-# KHÔI PHỤC COOKIE
-# ==========================
+# restore session from cookies
 auth_token = cookies.get("auth_token")
 if auth_token:
     st.session_state.logged_in = True
     st.session_state.user_id = cookies.get("user_id")
     st.session_state.user_name = cookies.get("user_name")
-    st.session_state.user_role = cookies.get("user_role")
     st.session_state.user_email = cookies.get("user_email")
+    st.session_state.user_role = cookies.get("user_role")
+    st.session_state.user_avatar = cookies.get("user_avatar")
 
-# ==========================
-# LOGIN CHECK
-# ==========================
 if not st.session_state.get("logged_in", False):
     st.warning("⚠️ Bạn chưa đăng nhập. Vui lòng quay lại trang đăng nhập.")
     st.stop()
 
-# ==========================
+# ---------------------------
 # USER INFO
-# ==========================
+# ---------------------------
 email = st.session_state.get("user_email")
-avatar_url = "https://cdn-icons-png.flaticon.com/512/149/149071.png"
-
-# ==========================
-# LẤY USER FIRESTORE
-# ==========================
+default_avatar = "https://cdn-icons-png.flaticon.com/512/149/149071.png"
 all_users = get_firestore_docs("users")
-user_data = next((u for u in all_users if u.get("email") == email), {})
-username_display = (
-    user_data.get("name") or
-    user_data.get("username") or
-    st.session_state.get("user_name") or
-    "Người dùng"
-)
+user_data = next((u for u in all_users if u.get("email") == email), {}) if isinstance(all_users, list) else {}
+username_display = user_data.get("name") or user_data.get("username") or st.session_state.get("user_name") or "Người dùng"
+avatar_url = user_data.get("avatar") or st.session_state.get("user_avatar") or default_avatar
 
-# ==========================
+# ---------------------------
+# HELPERS
+# ---------------------------
+def safe_comments(raw) -> List[Dict[str,Any]]:
+    """Chuẩn hoá field comments: trả về list của dict, bỏ qua item không phải dict"""
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        cleaned = []
+        for item in raw:
+            if isinstance(item, dict):
+                cleaned.append(item)
+            else:
+                try:
+                    parsed = json.loads(item)
+                    if isinstance(parsed, dict):
+                        cleaned.append(parsed)
+                except:
+                    continue
+        return cleaned
+    if isinstance(raw, dict):
+        vals = raw.get("values") or raw.get("arrayValue", {}).get("values")
+        if isinstance(vals, list):
+            parsed = []
+            for v in vals:
+                if isinstance(v, dict):
+                    if "mapValue" in v and "fields" in v["mapValue"]:
+                        fields = v["mapValue"]["fields"]
+                        obj = {}
+                        for k, vv in fields.items():
+                            if "stringValue" in vv:
+                                obj[k] = vv["stringValue"]
+                            else:
+                                obj[k] = vv
+                        parsed.append(obj)
+                    elif "stringValue" in v:
+                        try:
+                            obj = json.loads(v["stringValue"])
+                            if isinstance(obj, dict):
+                                parsed.append(obj)
+                        except:
+                            continue
+                    else:
+                        parsed.append(v)
+            return parsed
+    return []
+
+def add_comment_to_post(post_id: str, post_obj: Dict[str,Any], comment_obj: Dict[str,Any]):
+    old_comments = safe_comments(post_obj.get("comments", []))
+    updated = old_comments + [comment_obj]
+    update_firestore_doc("posts", post_id, {"comments": updated})
+
+def delete_comment_in_post(post_id: str, post_obj: Dict[str,Any], idx: int):
+    old_comments = safe_comments(post_obj.get("comments", []))
+    if 0 <= idx < len(old_comments):
+        old_comments.pop(idx)
+        update_firestore_doc("posts", post_id, {"comments": old_comments})
+
+def format_time(ts: str) -> str:
+    if not ts:
+        return ""
+    s = ts[:19]
+    return s.replace("T", " ")
+
+# ---------------------------
+# HEADER
+# ---------------------------
+st.markdown(f"""
+<div style='display:flex;justify-content:space-between;align-items:center;
+background-color:#1a73e8;padding:10px 20px;border-radius:10px;color:white;margin-bottom:10px;'>
+    <div style='font-size:22px;font-weight:700;'>📘 FloodConnect Mini</div>
+    <div style='display:flex;align-items:center;gap:12px;'>
+        <img src='{avatar_url}' width='36' height='36' style='border-radius:50%;border:2px solid white;'/>
+        <div style='font-weight:600'>{username_display}</div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ---------------------------
 # SIDEBAR
-# ==========================
+# ---------------------------
 st.sidebar.markdown("## ⚙️ Cài đặt tài khoản")
-tab = st.sidebar.radio("", ["Trang chủ", "Cài đặt"])
+tab = st.sidebar.radio("Điều hướng", ["Trang chủ", "Cài đặt"])
 
-# ==========================
-# HÀM ĐĂNG XUẤT
-# ==========================
-def logout(cookies: EncryptedCookieManager):
-    keys_to_clear = [
-        "logged_in", "user_id", "user_name", "user_role",
-        "user_email", "user_avatar", "fcm_token",
-        "profile_name", "profile_email", "lat_value",
-        "lng_value", "pending_lat", "pending_lng",
-    ]
-    for k in keys_to_clear:
+def logout(cookies_obj: EncryptedCookieManager):
+    keys = ["logged_in","user_id","user_name","user_email","user_role","user_avatar","auth_token"]
+    for k in keys:
         st.session_state.pop(k, None)
-
-    for ck in ["auth_token","user_id","user_name","user_role","user_email","user_avatar"]:
-        cookies[ck] = ""
-
-    cookies.save()
+        cookies_obj[k] = ""
+    cookies_obj.save()
     st.rerun()
 
-# ==========================
-# CÀI ĐẶT TÀI KHOẢN
-# ==========================
+# ---------------------------
+# SETTINGS
+# ---------------------------
 if tab == "Cài đặt":
     if st.button("🔒 Đăng xuất"):
         logout(cookies)
-
     st.subheader("Chỉnh sửa thông tin cá nhân")
-
     if "profile_name" not in st.session_state:
         st.session_state.profile_name = user_data.get("name", username_display)
-
     if "profile_email" not in st.session_state:
         st.session_state.profile_email = user_data.get("email", email)
-
     if "lat_value" not in st.session_state:
         st.session_state.lat_value = float(user_data.get("lat", 0.0) or 0)
-
     if "lng_value" not in st.session_state:
         st.session_state.lng_value = float(user_data.get("lng", 0.0) or 0)
 
-    # áp dụng pending lat/lng
     if "pending_lat" in st.session_state:
         st.session_state.lat_value = float(st.session_state.pending_lat)
         st.session_state.lng_value = float(st.session_state.pending_lng)
-        del st.session_state["pending_lat"]
-        del st.session_state["pending_lng"]
+        st.session_state.pop("pending_lat", None)
+        st.session_state.pop("pending_lng", None)
 
-    name = st.text_input("Tên hiển thị", key="profile_name")
-    email_edit = st.text_input("Email", key="profile_email")
+    st.text_input("Tên hiển thị", key="profile_name")
+    st.text_input("Email", key="profile_email")
     st.number_input("Vĩ độ", key="lat_value", format="%.6f")
     st.number_input("Kinh độ", key="lng_value", format="%.6f")
-
-    # Lấy tọa độ hiện tại
     if st.button("📍 Lấy tọa độ hiện tại"):
         js = """
         new Promise((resolve) => {
@@ -160,10 +198,9 @@ if tab == "Cài đặt":
             st.warning("Không lấy được vị trí.")
 
     st.markdown("---")
-
     if st.button("💾 Lưu thay đổi"):
         try:
-            update_firestore_doc("users", user_data["id"], {
+            update_firestore_doc("users", user_data.get("id"), {
                 "name": st.session_state.profile_name,
                 "email": st.session_state.profile_email,
                 "lat": float(st.session_state.lat_value),
@@ -179,125 +216,134 @@ if tab == "Cài đặt":
             st.rerun()
         except Exception as e:
             st.error("Lỗi cập nhật: " + str(e))
+    st.stop()
 
-# ==========================
-# HEADER
-# ==========================
-st.markdown(
-    f"""
-    <div style='display:flex;justify-content:space-between;align-items:center;
-    background-color:#1a73e8;padding:10px 20px;border-radius:10px;color:white;'>
-        <div style='font-size:24px;font-weight:bold;'>📘 Mạng Xã Hội Mini</div>
-        <div style='display:flex;align-items:center;gap:10px;'>
-            <img src='{avatar_url}' width='40' height='40' style='border-radius:50%;border:2px solid white;' />
-            <span style='font-size:18px;font-weight:500;'>{username_display}</span>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+# ---------------------------
+# TRANG CHỦ - Đăng bài
+# ---------------------------
+st.subheader("🖋️ Đăng bài mới")
+with st.form(key="new_post_form", clear_on_submit=True):
+    post_text = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm xúc...", height=120)
+    uploaded_image = st.file_uploader("📷 Chọn ảnh (tùy chọn)", type=["jpg","jpeg","png"])
+    submitted = st.form_submit_button("Đăng bài")
+    if submitted:
+        image_url = ""
+        if uploaded_image:
+            try:
+                up = cloudinary.uploader.upload(uploaded_image)
+                image_url = up.get("secure_url", "")
+            except Exception as e:
+                st.error("Lỗi upload ảnh: " + str(e))
+        post_obj = {
+            "user": username_display,
+            "email": email,
+            "avatar": avatar_url,
+            "content": post_text.strip(),
+            "image": image_url,
+            "timestamp": datetime.now().isoformat(),
+            "comments": []
+        }
+        add_firestore_doc("posts", post_obj)
+        st.success("Đăng bài thành công!")
+        st.rerun()
+
+# ---------------------------
+# BẢNG TIN
+# ---------------------------
 st.markdown("---")
+st.subheader("📰 Bảng tin")
+posts = sorted(get_firestore_docs("posts"), key=lambda x: x.get("timestamp",""), reverse=True)
 
-# ==========================
-# TRANG CHỦ
-# ==========================
-if tab == "Trang chủ":
-    st.subheader("🖋️ Đăng bài mới")
-    content = st.text_area("Bạn đang nghĩ gì?", placeholder="Chia sẻ cảm xúc của bạn...")
-    uploaded_image = st.file_uploader("📷 Chọn ảnh để đăng (tuỳ chọn)", type=["jpg","jpeg","png"])
+if not posts:
+    st.info("Chưa có bài viết nào.")
+else:
+    for post in posts:
+        post_id = post.get("id")
+        is_owner = (post.get("email") == email)
+        time_posted = format_time(post.get("timestamp", "")) or ""
+        post_user = post.get("user", "Người dùng")
+        post_avatar = post.get("avatar", default_avatar)
+        post_content = post.get("content", "")
+        post_image = post.get("image", "")
+        post_comments = safe_comments(post.get("comments", []))
 
-    if st.button("Đăng bài"):
-        if content.strip() or uploaded_image:
-            image_url = ""
-            if uploaded_image:
+        # Bài viết background xanh dương đậm
+        st.markdown(f"""
+        <div style='background:#0d47a1;color:white;padding:12px;border-radius:12px;margin-bottom:12px;'>
+            <div style='display:flex;justify-content:space-between;align-items:flex-start;'>
+                <div style='display:flex;gap:10px;align-items:center;'>
+                    <img src="{post_avatar}" width="50" height="50" style='border-radius:50%;border:2px solid #64b5f6;'/>
+                    <div>
+                        <div style='font-weight:700'>{post_user}</div>
+                        <div style='color:#cfd8dc;font-size:12px'>{time_posted}</div>
+                    </div>
+                </div>
+            </div>
+            <div style='margin-top:10px;font-size:15px;line-height:1.4;'>{post_content}</div>
+            {f"<img src='{post_image}' style='width:100%;margin-top:10px;border-radius:8px;' />" if post_image else ""}
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Delete post button
+        if is_owner:
+            if st.button("🗑️ Xoá bài", key=f"del_post_{post_id}"):
                 try:
-                    upload = cloudinary.uploader.upload(uploaded_image)
-                    image_url = upload.get("secure_url")
+                    delete_firestore_doc("posts", post_id)
+                    st.success("Đã xoá bài!")
                 except Exception as e:
-                    st.error("Lỗi upload ảnh: " + str(e))
-            add_firestore_doc("posts", {
+                    st.error("Lỗi xoá bài: " + str(e))
+                st.rerun()
+
+        # ====================
+        # COMMENTS
+        # ====================
+        st.markdown("**💬 Bình luận**")
+        if post_comments:
+            for idx, c in enumerate(post_comments):
+                c_user = c.get("user", "Người dùng")
+                c_avatar = c.get("avatar", default_avatar)
+                c_content = c.get("content", "")
+                c_time = format_time(c.get("timestamp", ""))
+
+                cols = st.columns([0.06, 0.86, 0.08])
+                with cols[0]:
+                    st.image(c_avatar, width=30)
+                with cols[1]:
+                    st.markdown(f"""
+                    <div style='background:#2196f3;padding:6px 10px;border-radius:8px;color:white;'>
+                        <strong>{c_user}</strong> <span style='font-size:12px;color:#e0e0e0'>{c_time}</span>
+                        <div style='margin-top:2px;font-size:14px;'>{c_content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with cols[2]:
+                    can_delete = (c.get("email") == email) or is_owner
+                    if can_delete:
+                        if st.button("🗑️", key=f"del_cmt_{post_id}_{idx}"):
+                            try:
+                                delete_comment_in_post(post_id, post, idx)
+                                st.success("Đã xoá bình luận")
+                            except Exception as e:
+                                st.error("Lỗi xoá bình luận: " + str(e))
+                            st.rerun()
+        else:
+            st.markdown("_Chưa có bình luận nào._")
+
+        # Add comment input
+        c_input_key = f"comment_input_{post_id}"
+        comment_text = st.text_input("Viết bình luận...", key=c_input_key)
+        if st.button("Gửi", key=f"send_comment_{post_id}") and comment_text.strip():
+            comment_obj = {
                 "user": username_display,
                 "email": email,
                 "avatar": avatar_url,
-                "content": content.strip(),
-                "image": image_url,
-                "timestamp": datetime.now().isoformat(),
-            })
-            st.success("Đăng bài thành công!")
-            st.rerun()
-        else:
-            st.warning("Nội dung bài viết trống.")
-
-    st.markdown("---")
-    st.subheader("📰 Bảng tin")
-
-    # ===== Vòng lặp bài viết =====
-    posts = sorted(get_firestore_docs("posts"), key=lambda x: x.get("timestamp",""), reverse=True)
-    if not posts:
-        st.info("Chưa có bài viết nào.")
-    else:
-        for post in posts:
-            post_id = post.get("id")
-            is_owner = post.get("email") == email
-            time_posted = post.get("timestamp","")[:16].replace("T"," ")
-
-            # Header bài viết + nút xoá
-            col1, col2 = st.columns([0.9, 0.1])
-            with col1:
-                st.markdown(f"""
-                    <div style='display:flex;align-items:center;gap:10px;'>
-                        <img src='{post.get("avatar", avatar_url)}' width='50' height='50'
-                            style='border-radius:50%;border:2px solid #1a73e8;' />
-                        <div>
-                            <strong style='font-size:16px;'>{post.get("user")}</strong><br>
-                            <span style='font-size:12px;color:#555;'>{time_posted}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-            with col2:
-                if is_owner:
-                    if st.button("🗑️", key=f"del_{post_id}", help="Xoá bài"):
-                        delete_firestore_doc("posts", post_id)
-                        st.success("Đã xoá bài!")
-                        st.rerun()
-
-            # Nội dung bài
-            st.markdown(f"<div style='font-size:15px;line-height:1.4;margin-top:5px;'>{post.get('content','')}</div>", unsafe_allow_html=True)
-
-            # Hình ảnh
-            if post.get("image"):
-                st.markdown(f"<img src='{post['image']}' style='width:100%;margin-top:10px;border-radius:12px;' />", unsafe_allow_html=True)
-
-            # Bình luận
-            comments = sorted(get_firestore_docs("comments"), key=lambda x: x.get("timestamp",""))
-            post_comments = [c for c in comments if c.get("post_id")==post_id]
-            for c in post_comments:
-                comment_time = c.get("timestamp","")[:16].replace("T"," ")
-                st.markdown(f"""
-                    <div style='display:flex;align-items:flex-start;gap:10px;margin-top:10px;'>
-                        <img src='{c.get("avatar", avatar_url)}' width='30' height='30'
-                            style='border-radius:50%;border:1px solid #1a73e8;' />
-                        <div style='background:#064c80;padding:5px 10px;border-radius:10px;'>
-                            <strong style='font-size:14px;'>{c.get("user")}</strong> 
-                            <span style='font-size:10px;color:#ffffff;'>{comment_time}</span>
-                            <div style='font-size:14px;margin-top:2px;'>{c.get("content","")}</div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-            # Input bình luận
-            new_comment_key = f"new_comment_{post_id}"
-            new_comment = st.text_input("💬 Viết bình luận...", key=new_comment_key)
-            if st.button("Gửi", key=f"send_comment_{post_id}") and new_comment.strip():
-                add_firestore_doc("comments", {
-                    "post_id": post_id,
-                    "user": username_display,
-                    "email": email,
-                    "avatar": avatar_url,
-                    "content": new_comment.strip(),
-                    "timestamp": datetime.now().isoformat(),
-                })
+                "content": comment_text.strip(),
+                "timestamp": datetime.now().isoformat()
+            }
+            try:
+                add_comment_to_post(post_id, post, comment_obj)
                 st.success("Đã gửi bình luận!")
-                st.rerun()
+            except Exception as e:
+                st.error("Lỗi gửi bình luận: " + str(e))
+            st.rerun()
 
-            st.markdown("<hr style='margin:15px 0;' />", unsafe_allow_html=True)
+        st.markdown("---")
