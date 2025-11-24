@@ -305,7 +305,7 @@ else:
                 c_content = c.get("content", "")
                 c_time = format_time(c.get("timestamp", ""))
 
-                cols = st.columns([0.0, 0.86, 0.05])
+                cols = st.columns([0.03, 0.86, 0.05])
                 with cols[0]:
                     st.image(c_avatar, width=100)
                 with cols[1]:
