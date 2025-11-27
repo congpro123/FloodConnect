@@ -221,7 +221,7 @@ with col3:
 with col4:
     if st.button("🆘 Tôi là người cần cứu trợ"):
         st.query_params["scroll"] = ["form"]
-        st.switch_page("pages/Bản đồ.py")
+        st.switch_page("pages/Báo cáo.py")
 
 st.markdown("<h2>ABOUT</h2>", unsafe_allow_html=True)
 
