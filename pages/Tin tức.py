@@ -13,7 +13,10 @@ RSS_FEEDS = [
 KEYWORDS = ["bão", "lũ", "lụt", "thiên tai", "mưa", "áp thấp",
             "ngập", "sạt lở", "động đất", "khô hạn"]
 
-st.title("🌧️ Tin tức Thiên tai tại Việt Nam")
+st.set_page_config(
+    page_title="🌧️ Tin tức Thiên tai tại Việt Nam",
+    page_icon="assets/logo.png",     # Favicon
+)
 
 # --- Bộ lọc thời gian ---
 filter_option = st.selectbox(
