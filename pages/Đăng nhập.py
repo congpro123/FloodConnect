@@ -49,7 +49,11 @@ if st.session_state.logged_in:
 # ======================================================
 #  PAGE CONFIG
 # ======================================================
-st.set_page_config(page_title="FloodConnect - Đăng nhập", layout="centered")
+st.set_page_config(
+    page_title="🔐 Đăng nhập FloodConnect",
+    page_icon="assets/logo.png",     # Favicon
+    layout="centered"
+)
 
 
 # ======================================================
