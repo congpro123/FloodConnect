@@ -140,22 +140,22 @@ col1, col2, col3, col4 = st.columns(4)
 with col1:
     if st.button("💰 Nhà hảo tâm"):
         st.session_state["role"] = "RichKid"
-        st.switch_page("Đăng nhập")
+        st.switch_page("Đăng nhập.py")
 
 with col2:
     if st.button("🤝 Tình nguyện viên"):
         st.session_state["role"] = "Supporter"
-        st.switch_page("Đăng nhập")
+        st.switch_page("Đăng nhập.py")
 
 with col3:
     if st.button("🏠 Người dân vùng lũ"):
         st.session_state["role"] = "flooded_guys"
-        st.switch_page("Đăng nhập")
+        st.switch_page("Đăng nhập.py")
 
 with col4:
     if st.button("🆘 Tôi là người cần cứu trợ"):
         st.session_state["role"] = "flooded_people"
-        st.switch_page("Báo cáo")
+        st.switch_page("Báo cáo.py")
 
 # --- ABOUT ---
 st.markdown("<h2>ABOUT</h2>", unsafe_allow_html=True)
@@ -188,3 +188,4 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+
