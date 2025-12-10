@@ -26,7 +26,7 @@ cloudinary.config(
     secure=True
 )
 
-st.set_page_config(page_title="FloodConnect - Mạng Xã Hội Mini", layout="wide")
+st.set_page_config(page_title="FloodConnect - Mạng Xã Hội Mini", page_icon="assets/logo.png", layout="wide")
 
 # ---------------------------
 # COOKIE + SESSION
